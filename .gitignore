@@ -1,0 +1,10 @@
+# Ignore a specific directory
+data/
+logs/
+model_output/
+
+# Ignore all .log files
+*.log
+
+# Ignore a specific file
+path/to/your/file.txt
