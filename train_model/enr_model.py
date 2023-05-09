@@ -11,6 +11,7 @@ from sklearn.model_selection import GridSearchCV
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 from sklearn.model_selection import train_test_split
 import train_model.helper as hlp
+from data_prep.preprocess_data import generate_predict_data
 FWD_LAG_DAYS = 2
 
 
@@ -61,19 +62,22 @@ def train_models(sku_lagged_data_dict: Dict[str, pd.DataFrame]) -> Dict[str, Ela
 
     # Define the hyperparameter grid for ElasticNet
     param_grid = {
-           'alpha': [0.1, 1, 10],
-           'l1_ratio': [0.1, 0.5, 0.9],
-           'max_iter': [1000, 5000, 10000]
+           'alpha': [0.1, 1, 5, 10],
+           'l1_ratio': [0.1, 0.3, 0.5, 0.9],
+           'max_iter': [10000, 50000, 100000, 200000]
        }
+
+    y_col = 'item_qty'
+    y_cols  = [f"{y_col}_fwd_{lag}" for lag in range(1, FWD_LAG_DAYS)]
+    y_cols.insert(0, y_col)
+    x_drop = ['average_price', 'order_count',  'returning_customer', 'new_customer'] 
 
     # Train a separate model for each SKU DataFrame in sku_lagged_data_dict
     for sku, df in sku_lagged_data_dict.items():
         # Split the data into training and testing sets
-        y_col = 'item_qty'
-        y_cols  = [f"{y_col}_fwd_{lag}" for lag in range(1, FWD_LAG_DAYS)]
-        y_cols.insert(0, y_col)
 
-        X_train, X_test, y_train, y_test = hlp.split_and_transform(df, y_cols,
+
+        X_train, X_test, y_train, y_test = hlp.split_and_transform(df, y_cols, x_drop,
             test_size=0.2,
             random_state=42
         )
@@ -133,37 +137,6 @@ def filter_and_save_models_dep(models, output_dir, threshold=0.4):
 
 
 
-def split_and_transform_dep(df, y_cols: List[str], test_size=0.2, random_state=None) -> Tuple:
-    # Separate the features (X) and target (y) variables
-    X = df.drop(y_cols, axis=1)
-    y = df.loc[:, y_cols]
-    y.fillna(0, inplace=True)
-    # Split the data into training and testing sets
-    X_train, X_test, y_train, y_test = train_test_split(
-        X,
-        y,
-        test_size=test_size,
-        random_state=random_state
-    )
-
-    # Initialize the scaler and fit it to the training set
-    scaler = StandardScaler()
-    '''
-    It's generally a good practice to fit the scaler on the training data only and then use it to 
-    transform both the training and testing data. This is because in real-world scenarios, 
-    you won't have access to the testing data during the model development phase, so you need to 
-    simulate this by holding out a portion of the training data for testing. By fitting the scaler 
-    on the training data only, you're ensuring that your model is not "cheating" by learning 
-    information from the testing data.
-    '''
-    scaler.fit(X_train)
-
-    # Transform the training and testing sets using the scaler
-    X_train_scaled = scaler.transform(X_train)
-    X_test_scaled = scaler.transform(X_test)
-
-    # Return the transformed data and target variables
-    return X_train_scaled, X_test_scaled, y_train, y_test
 
 # add predict method that takes loads model for the given SKU in function arg from the model directory in arguments
 # the functon also takes a dataframe of input values and rwturns perdiction results
@@ -176,8 +149,11 @@ def predict_sku_model(sku, input_df, model_dir, scaler_dir):
     model = joblib.load(model_path)
     scaler = joblib.load(scaler_path)
 
+    # TODO lot more wotk needed here
+    processed_data = generate_predict_data(input_df)
+ 
     # Scale the input data using the previously saved scaler
-    scaled_input = scaler.transform(input_df)
+    scaled_input = scaler.transform(processed_data)
 
     # Make predictions using the loaded model and scaled data
     predictions = model.predict(scaled_input)

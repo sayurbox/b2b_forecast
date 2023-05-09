@@ -1,4 +1,5 @@
 import os
+import io
 import pandas as pd
 from typing import Dict, Tuple, List
 from xgboost.sklearn import XGBRegressor
@@ -10,9 +11,10 @@ import logging
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 from sklearn.model_selection import train_test_split
 
-def split_and_transform(df, y_cols: List[str], test_size=0.2, random_state=None) -> Tuple:
+def split_and_transform(df, y_cols: List[str], x_drop: List[str],test_size=0.2, random_state=None) -> Tuple:
     # Separate the features (X) and target (y) variables
     X = df.drop(y_cols, axis=1)
+    X = X.drop(x_drop, axis=1)
     y = df.loc[:, y_cols]
     y.fillna(0, inplace=True)
     # Split the data into training and testing sets
@@ -44,12 +46,20 @@ def split_and_transform(df, y_cols: List[str], test_size=0.2, random_state=None)
     # Return the transformed data and target variables
     return X_train_scaled, X_test_scaled, y_train, y_test
 
+def transform_input(input_df, y_cols: List[str], x_drop: List[str], scaler):
+    X = input_df.drop(y_cols, axis=1)
+    X = X.drop(x_drop, axis=1)
 
-def filter_and_save_models(models, output_dir, threshold=0.4):
+    return scaler.transform(X)
+
+def filter_and_save_models(models, output_dir, threshold=0.4, message_stream=None):
     """
     Evaluate the models on the training set, print the R-squared for each SKU above
     the given threshold, and save the passing models to a subfolder called 'pass'.
     """
+    if not message_stream:
+            raise ValueError("No message stream provided.")
+    
     # Create the 'pass' directory if it doesn't already exist
     os.makedirs(output_dir, exist_ok=True)
 
@@ -61,3 +71,4 @@ def filter_and_save_models(models, output_dir, threshold=0.4):
             model_filename = f"{sku}.pkl"
             model_file_path = os.path.join(output_dir, f"{sku}_model.joblib")
             joblib.dump(model, model_file_path)
+            

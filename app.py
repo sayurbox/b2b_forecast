@@ -1,4 +1,4 @@
-import os
+import os, io
 from data_prep.load_data import CsvLoader, DatabaseLoader
 from data_prep.preprocess_data import preprocess_data
 import train_model.enr_model as enr
@@ -56,12 +56,14 @@ if __name__ == '__main__':
    
     # Define the output directory elastic net
     output_dir_enr = "model_output/enr"
-    
-    hlp.filter_and_save_models(trained_models_dict, output_dir_enr, 0.4)
+    message_stream = io.StringIO()
+     
+    hlp.filter_and_save_models(trained_models_dict, output_dir_enr, 0.4, message_stream)
 
-    xgb_trained_models_dict = xgb.train_models(processed_data)
+#    xgb_trained_models_dict = xgb.train_models(processed_data)
 
     # Define the output directory for XGB
     output_dir_xgb = "model_output/xgb"
+ #   message_stream = io.StringIO()
     
-    hlp.filter_and_save_models(xgb_trained_models_dict, output_dir_xgb, 0.4)
+#    hlp.filter_and_save_models(xgb_trained_models_dict, output_dir_xgb, 0.4, message_stream)

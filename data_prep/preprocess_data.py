@@ -4,8 +4,10 @@ import numpy as np
 from sklearn.preprocessing  import MinMaxScaler, StandardScaler
 from sklearn.preprocessing import OneHotEncoder
 
-HIST_LAG_DAYS = 20
+HIST_LAG_DAYS = 10
 FWD_LAG_DAYS = 2
+lagged_cols = ['average_price', 'order_count', 'item_qty', 'returning_customer', 'new_customer']
+date_column = 'orderDate'
 def preprocess_data(data):
     """
     Preprocess the input data, e.g., handle missing values, normalize or standardize variables, etc.
@@ -15,7 +17,6 @@ def preprocess_data(data):
     # dont need sku_description
     #todo remove  this line after fixing pisang report
     data = data.drop(['sku_description','order_count_1'], axis=1)
-    lagged_cols = ['average_price', 'order_count', 'item_qty', 'returning_customer', 'new_customer']
 
  #   data = normalize_cols(data, lagged_cols)
 
@@ -28,10 +29,8 @@ def preprocess_data(data):
     for sku, data in filtered_sku_data_dict.items():
         #fill any missing sales rows with zero
         filled_data = fill_missing_sales_dates(data, 'orderDate', 'sku_number')
-        # We will do the normalization close to training models after the split is done 
-#       #norm_data = normalize_cols(filled_data, lagged_cols)
         # Generate lagged columns for this SKU's DataFrame
-        lagged_data = generate_lagged_columns(filled_data, 'orderDate' ,lagged_cols)
+        lagged_data = generate_lagged_columns(filled_data, 'orderDate' ,lagged_cols, HIST_LAG_DAYS)
         lagged_data = add_fwd_sales_cols(lagged_data, 'orderDate', 'item_qty')
         lagged_data = lagged_data.drop('orderDate', axis = 1)
         sku_lagged_data_dict[sku] = lagged_data.copy()
@@ -111,40 +110,8 @@ def generate_lagged_columns(df, date_column, lag_cols):
 """
 
 
-def generate_lagged_columns_old(df, date_column, col_names):
-    """
-    Generate lagged columns for the given column names.
-    """
-    # Ensure the data is sorted by SKU and the date column in ascending order
-    df = df.sort_values(by=[date_column])
-        # Create a copy of the DataFrame to avoid modifying the original
-    lagged_df = df.copy()
 
-    # Create a list to store the lagged DataFrames
-    lagged_dfs = []
-
-    # Generate lagged columns for each column name
-    for col_name in col_names:
-        lagged_cols = [lagged_df[col_name].shift(lag) for lag in range(1, HIST_LAG_DAYS)]
-        # Generate 30 lagged columns for the current column name
-        for lag in range(1, HIST_LAG_DAYS):
-            new_col_name = f"{col_name}_lag_{lag}"
-            lagged_df[new_col_name] = lagged_df[col_name].shift(lag)
-
-        # Select only the lagged columns for the current column name
-        lagged_cols = [f"{col_name}_lag_{lag}" for lag in range(1, HIST_LAG_DAYS)]
-        lagged_df_subset = lagged_df[lagged_cols]
-
-        # Add the lagged DataFrame to the list
-        lagged_dfs.append(lagged_df_subset)
-
-    # Concatenate the original DataFrame with all the lagged DataFrames
-    result = pd.concat([df] + lagged_dfs, axis=1).iloc[HIST_LAG_DAYS:]
-
-    return result
-
-
-def generate_lagged_columns(df, date_column, col_names):
+def generate_lagged_columns(df, date_column, col_names, num_legs):
     """
     Generate lagged columns and day-of-week encoding for the given column names.
     """
@@ -158,9 +125,9 @@ def generate_lagged_columns(df, date_column, col_names):
 
     # Generate HIST_LAG_DAYS lagged columns for each column name
     for col_name in col_names:
-        lagged_cols = [lagged_df[col_name].shift(lag) for lag in range(1, HIST_LAG_DAYS)]
+        lagged_cols = [lagged_df[col_name].shift(lag) for lag in range(1, num_legs)]
         lagged_df_subset = pd.concat(lagged_cols, axis=1)
-        lagged_df_subset.columns = [f"{col_name}_lag_{lag}" for lag in range(1, HIST_LAG_DAYS)]
+        lagged_df_subset.columns = [f"{col_name}_lag_{lag}" for lag in range(1, num_legs)]
 
         # Add the lagged DataFrame to the list
         lagged_dfs.append(lagged_df_subset)
@@ -177,28 +144,22 @@ def generate_lagged_columns(df, date_column, col_names):
     lagged_df_concat = pd.concat(lagged_dfs, axis=1)
 
     # Concatenate the original DataFrame with all the lagged DataFrames and day-of-week encoding DataFrame
-    result = pd.concat([df, lagged_df_concat, day_of_week_enc_df], axis=1).iloc[HIST_LAG_DAYS:-FWD_LAG_DAYS]
+    result = pd.concat([df, lagged_df_concat, day_of_week_enc_df], axis=1).iloc[num_legs:-FWD_LAG_DAYS]
 
     return result
 
-def generate_predict_data(input_df, date_column, col_names):
+def generate_predict_data(input_df):
     if len(input_df) < 20:
         raise ValueError("Input dataframe size should be at least 20.")    
 
     # Sort DataFrame by date column
     input_df = input_df.sort_values(by=date_column)
     
+    filled_data = fill_missing_sales_dates(input_df, date_column, 'sku_number')
+    numLegs = HIST_LAG_DAYS -1
+    lagged_data = generate_lagged_columns(filled_data, date_column ,lagged_cols, numLegs)
     # Extract row with latest date
-    latest_row = input_df.tail(1)
-
-    # Generate lagged columns for each column in col_names
-    lagged_cols = pd.DataFrame()
-    for col in col_names:
-        for i in range(1, HIST_LAG_DAYS):
-            lagged_cols[f"{col}_lag{i}"] = latest_row[col].shift(i).values
-
-    # Concatenate lagged columns with latest_row and drop any NaN values
-    predict_data = pd.concat([latest_row, lagged_cols], axis=1).dropna()
+    predict_data = lagged_data.tail(1)
 
     return predict_data
 
