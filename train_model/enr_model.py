@@ -6,6 +6,7 @@ import numpy as np
 from typing import Tuple, List, Dict
 import joblib
 import logging
+import datetime
 
 from sklearn.model_selection import GridSearchCV
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
@@ -70,7 +71,7 @@ def train_models(sku_lagged_data_dict: Dict[str, pd.DataFrame]) -> Dict[str, Ela
     y_col = 'item_qty'
     y_cols  = [f"{y_col}_fwd_{lag}" for lag in range(1, FWD_LAG_DAYS)]
     y_cols.insert(0, y_col)
-    x_drop = ['average_price', 'order_count',  'returning_customer', 'new_customer'] 
+    x_drop = ['sku_number','average_price', 'order_count',  'returning_customer', 'new_customer'] 
 
     # Train a separate model for each SKU DataFrame in sku_lagged_data_dict
     for sku, df in sku_lagged_data_dict.items():
@@ -141,6 +142,13 @@ def filter_and_save_models_dep(models, output_dir, threshold=0.4):
 # add predict method that takes loads model for the given SKU in function arg from the model directory in arguments
 # the functon also takes a dataframe of input values and rwturns perdiction results
 # the function should use the scaler saved earlier. 
+
+start_date = datetime.datetime(2023, 5, 1)
+end_date = datetime.datetime(2023, 5, 9)
+
+date_list = [start_date + datetime.timedelta(days=x) for x in range((end_date - start_date).days + 1)]
+
+
 def predict_sku_model(sku, input_df, model_dir, scaler_dir):
     model_path = os.path.join(model_dir, f"{sku}_model.joblib")
     #model_path = f"{model_dir}/{sku}_model.joblib"
@@ -150,12 +158,16 @@ def predict_sku_model(sku, input_df, model_dir, scaler_dir):
     scaler = joblib.load(scaler_path)
 
     # TODO lot more wotk needed here
-    processed_data = generate_predict_data(input_df)
+    for date in date_list:
+        processed_data = generate_predict_data(input_df, date)
  
-    # Scale the input data using the previously saved scaler
-    scaled_input = scaler.transform(processed_data)
+        # Scale the input data using the previously saved scaler
+        processed_data = processed_data[scaler.feature_names_in_]
+        scaled_input = scaler.transform(processed_data)
 
-    # Make predictions using the loaded model and scaled data
-    predictions = model.predict(scaled_input)
+        # Make predictions using the loaded model and scaled data
+        predictions = model.predict(scaled_input)
+        print('SKU-',sku, 'date -', date, 'forecast' ,predictions[0][0], predictions[0][1])
+        print("----")
 
     return predictions

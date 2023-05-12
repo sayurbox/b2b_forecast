@@ -16,7 +16,7 @@ def preprocess_data(data):
     # ...
     # dont need sku_description
     #todo remove  this line after fixing pisang report
-    data = data.drop(['sku_description','order_count_1'], axis=1)
+    data = data.drop(['sku_description'], axis=1)
 
  #   data = normalize_cols(data, lagged_cols)
 
@@ -131,7 +131,6 @@ def generate_lagged_columns(df, date_column, col_names, num_legs):
 
         # Add the lagged DataFrame to the list
         lagged_dfs.append(lagged_df_subset)
-
     # Add day-of-week encoding for each row in the subset DataFrame
     dates_subset = lagged_df[date_column].reset_index(drop=True)
     day_of_week = dates_subset.dt.dayofweek.values.reshape(-1, 1)
@@ -147,17 +146,34 @@ def generate_lagged_columns(df, date_column, col_names, num_legs):
     result = pd.concat([df, lagged_df_concat, day_of_week_enc_df], axis=1).iloc[num_legs:-FWD_LAG_DAYS]
 
     return result
+def shift_predict_values(lagged_df, col_names, num_legs):
+    df_to_modify = lagged_df
+    for col_name in col_names:
+        df_to_modify[f"{col_name}_lag_{num_legs}"] = np.nan
+        for i in range(1, num_legs):
+            curr_lag = num_legs - i +1
+            prev_leg = curr_lag -1
+            df_to_modify[f"{col_name}_lag_{curr_lag}"] = df_to_modify[f"{col_name}_lag_{(prev_leg)}"]
+        df_to_modify.drop(col_name, axis = 1, inplace = True )
 
-def generate_predict_data(input_df):
-    if len(input_df) < 20:
-        raise ValueError("Input dataframe size should be at least 20.")    
+    return df_to_modify    
+
+
+def generate_predict_data(input_df, dateToPredict):
+    input_df[date_column] = pd.to_datetime(input_df[date_column]).dt.date
+    input_df = input_df.sort_values(by=date_column)
+    predict_df = input_df[input_df[date_column] < dateToPredict.date()]
+   # if len(predict_df) < 20:
+
+        #raise ValueError("Input dataframe size should be at least 20.")    
 
     # Sort DataFrame by date column
-    input_df = input_df.sort_values(by=date_column)
     
-    filled_data = fill_missing_sales_dates(input_df, date_column, 'sku_number')
+    filled_data = fill_missing_sales_dates(predict_df, date_column, 'sku_number')
     numLegs = HIST_LAG_DAYS -1
     lagged_data = generate_lagged_columns(filled_data, date_column ,lagged_cols, numLegs)
+    lagged_data = shift_predict_values(lagged_data, lagged_cols, numLegs)
+    lagged_data = lagged_data.drop(['sku_number','orderDate','sku_description' ], axis = 1)
     # Extract row with latest date
     predict_data = lagged_data.tail(1)
 

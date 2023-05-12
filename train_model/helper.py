@@ -1,5 +1,6 @@
 import os
 import io
+import json
 import pandas as pd
 from typing import Dict, Tuple, List
 from xgboost.sklearn import XGBRegressor
@@ -52,13 +53,12 @@ def transform_input(input_df, y_cols: List[str], x_drop: List[str], scaler):
 
     return scaler.transform(X)
 
-def filter_and_save_models(models, output_dir, threshold=0.4, message_stream=None):
+def filter_and_save_models(models, output_dir, threshold=0.4):
     """
     Evaluate the models on the training set, print the R-squared for each SKU above
     the given threshold, and save the passing models to a subfolder called 'pass'.
     """
-    if not message_stream:
-            raise ValueError("No message stream provided.")
+    output_json = {}
     
     # Create the 'pass' directory if it doesn't already exist
     os.makedirs(output_dir, exist_ok=True)
@@ -68,7 +68,12 @@ def filter_and_save_models(models, output_dir, threshold=0.4, message_stream=Non
         # If the R-squared is above the threshold, print the SKU and score and save the model
         if score > threshold:
             print(f"SKU {sku}: R-squared = {score}")
+            msg = "{" + f"SKU {sku}: R-squared = {score}" + "}"
+            output_json[sku] = score
             model_filename = f"{sku}.pkl"
             model_file_path = os.path.join(output_dir, f"{sku}_model.joblib")
             joblib.dump(model, model_file_path)
+    result_file = os.path.join(output_dir, "trainedSKU.json") 
+    with open(result_file, 'w')  as resFile:
+        json.dump(output_json, resFile)      
             

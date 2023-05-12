@@ -8,3 +8,13 @@ model_output/
 
 # Ignore a specific file
 path/to/your/file.txt
+data_prep/__pycache__
+.gitignore
+logs.log.2023-05-08
+logs.log.2023-05-10
+train_model/__pycache__/
+train_model/__pycache__/enr_model.cpython-310.pyc
+data_prep/__pycache__/
+train_model/__pycache__/xgb_model.cpython-310.pyc
+train_model/__pycache__/helper.cpython-310.pyc
+.gitignore

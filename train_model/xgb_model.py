@@ -20,11 +20,14 @@ def train_models(sku_lagged_data_dict: Dict[str, pd.DataFrame]) -> Dict[str, XGB
     # Define the hyperparameter grid for XGBRegressor
     param_grid = {
             'max_depth': [3, 4, 5],
+            'eta':[0.01, 0.05, 0.1],
             'min_child_weight': [1, 2, 3],
             'learning_rate': [0.01, 0.05, 0.1],
             'n_estimators': [100, 500, 1000],
             'gamma': [0, 0.1, 0.2],
-            'subsample': [0.5, 0.8, 1.0]
+            'subsample': [0.5, 0.8, 1.0],
+            'colsample_bytree': [0.5, 0.7, 1 ]
+
         }
 
 
@@ -34,8 +37,9 @@ def train_models(sku_lagged_data_dict: Dict[str, pd.DataFrame]) -> Dict[str, XGB
         y_col = 'item_qty'
         y_cols  = [f"{y_col}_fwd_{lag}" for lag in range(1, FWD_LAG_DAYS)]
         y_cols.insert(0, y_col)
+        x_drop = ['sku_number','average_price', 'order_count',  'returning_customer', 'new_customer'] 
 
-        X_train, X_test, y_train, y_test = hlp.split_and_transform(df, y_cols,
+        X_train, X_test, y_train, y_test = hlp.split_and_transform(df, y_cols, x_drop,
             test_size=0.2,
             random_state=42
         )
